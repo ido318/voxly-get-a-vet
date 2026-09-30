@@ -106,25 +106,115 @@ docs/             Development notes, RLS matrix, architecture
 
 ## Run locally
 
-Prerequisites: Node.js ≥ 20, Supabase CLI, Twilio and ElevenLabs accounts (agent only).
+Prerequisites: Node.js ≥ 20, Supabase CLI. Twilio and ElevenLabs accounts are only needed for real calls. The agent boots with placeholder values.
+
+### 1. Install and start Supabase
 
 ```bash
 git clone https://github.com/ido318/voxly-get-a-vet.git
 cd voxly-get-a-vet
 npm install
 
-cd supabase && supabase start && cd ..
-
-cd app
-cp .env.example .env.local     # fill in from `supabase status`
-npm run seed:all               # demo clinic + dev user
-npm run dev                    # http://localhost:3001
-
-# voice agent (separate terminal)
-cd agent
-cp .env.example .env
-npm run dev
+supabase start            # run from the repo root (applies migrations + seed.sql)
+supabase status -o env    # prints API_URL, ANON_KEY, SERVICE_ROLE_KEY
 ```
+
+| `supabase status -o env` | Env variable |
+|---|---|
+| `API_URL` | `NEXT_PUBLIC_SUPABASE_URL` (app) / `SUPABASE_URL` (agent) |
+| `ANON_KEY` (JWT, `eyJ...`) | `NEXT_PUBLIC_SUPABASE_ANON_KEY` (app) |
+| `SERVICE_ROLE_KEY` (JWT, `eyJ...`) | `SUPABASE_SERVICE_ROLE_KEY` (app + agent) |
+
+If your CLI version also prints `PUBLISHABLE_KEY` / `SECRET_KEY`, use the JWT keys above.
+
+The seeded demo clinic ID is `00000000-0000-4000-8000-000000000001` (from `supabase/seed.sql`).
+
+Generate two **different** bearer tokens (min. 16 chars each):
+
+```bash
+openssl rand -hex 24   # JOBS_BEARER_TOKEN  (same value in app + agent)
+openssl rand -hex 24   # TOOLS_BEARER_TOKEN (agent only)
+```
+
+### 2. `app/.env.local`
+
+```env
+APP_ENV=development
+APP_BASE_URL=http://localhost:3001
+
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<ANON_KEY>
+SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
+
+DEV_USER_EMAIL=owner@demo-clinic.local
+DEV_USER_PASSWORD=dev-password-change-me
+
+# Lets the dashboard trigger the local agent's SMS job right away
+AGENT_BASE_URL=http://localhost:3000
+JOBS_BEARER_TOKEN=<JOBS_BEARER_TOKEN>
+
+TWILIO_CLINIC_ID=00000000-0000-4000-8000-000000000001
+GREEN_INVOICE_ENV=sandbox
+RUN_INTEGRATION_TESTS=false
+
+# Optional: leave empty until you have real keys
+OPENAI_API_KEY=
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_CLINIC_PHONE_NUMBER=
+ELEVENLABS_API_KEY=
+ELEVENLABS_AGENT_ID=
+ELEVENLABS_TEST_IDS=
+```
+
+Do not set `HEALTH_CHECK_TOKEN` to a short or placeholder value. If it is set, it must be at least 16 characters. Omit it otherwise.
+
+### 3. `agent/.env`
+
+```env
+NODE_ENV=development
+PORT=3000
+LOG_LEVEL=info
+PUBLIC_BASE_URL=http://localhost:3000
+
+# Placeholders pass validation (SID must start with "AC", number with "+").
+# Replace with real values to place/receive calls.
+TWILIO_ACCOUNT_SID=AC00000000000000000000000000000000
+TWILIO_AUTH_TOKEN=placeholder
+TWILIO_PHONE_NUMBER=+972500000000
+TWILIO_VALIDATE_SIGNATURE=false
+
+ELEVENLABS_API_KEY=placeholder
+ELEVENLABS_AGENT_ID=placeholder
+ELEVENLABS_WEBHOOK_SECRET=placeholder
+
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
+
+JOBS_BEARER_TOKEN=<JOBS_BEARER_TOKEN>
+TOOLS_BEARER_TOKEN=<TOOLS_BEARER_TOKEN>
+
+AGENT_CLINIC_ID=00000000-0000-4000-8000-000000000001
+```
+
+`SUPABASE_ACCESS_TOKEN` is not required to run the agent locally.
+
+### 4. Seed and run
+
+```bash
+# demo data + dev login (owner@demo-clinic.local / dev-password-change-me)
+cd app && npm run seed:all
+
+# terminal 1: voice agent on :3000
+cd agent && npm run dev
+
+# terminal 2: dashboard on :3001 (the agent already uses :3000)
+cd app && npm run dev -- -p 3001
+```
+
+**Real calls:** replace the Twilio and ElevenLabs placeholders with real credentials. Then expose the agent through a tunnel (e.g. ngrok), set `PUBLIC_BASE_URL` to the tunnel URL and set `TWILIO_VALIDATE_SIGNATURE=true`.
+
+### Checks
 
 ```bash
 npm run test:all
