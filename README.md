@@ -109,8 +109,8 @@ docs/             Development notes, RLS matrix, architecture
 Prerequisites: Node.js ≥ 20, Supabase CLI, Twilio and ElevenLabs accounts (agent only).
 
 ```bash
-git clone https://github.com/ido318/voxly-vet.git
-cd voxly-vet
+git clone https://github.com/ido318/voxly-get-a-vet.git
+cd voxly-get-a-vet
 npm install
 
 cd supabase && supabase start && cd ..
